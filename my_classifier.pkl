@@ -14,7 +14,7 @@ S'priors'
 p6
 NsS'_sklearn_version'
 p7
-S'0.20.1'
+S'0.20.2'
 p8
 sS'var_smoothing'
 p9
