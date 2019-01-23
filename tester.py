@@ -12,8 +12,9 @@
 
 import pickle
 import sys
+from sklearn.model_selection import train_test_split
 from sklearn.cross_validation import StratifiedShuffleSplit
-sys.path.append("../tools/")
+
 from feature_format import featureFormat, targetFeatureSplit
 
 PERF_FORMAT_STRING = "\
