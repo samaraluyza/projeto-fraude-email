@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
+from __future__ import division
 
 import sys
 import pickle
 import pandas as pd
 import matplotlib.pyplot as plt
+from time import time
+
 
 from feature_format import featureFormat, targetFeatureSplit
 from tester import dump_classifier_and_data, test_classifier
@@ -45,11 +48,31 @@ data_pandas = pd.DataFrame.from_dict(data_dict, 'index')
 
 print 'Número de NaN por features'
 
+features_name = []
+features_proprotion = []
+
+fig, ax = plt.subplots()
+
 for feature in all_features:
     ser = data_pandas[feature].value_counts()
     if ser.index.contains('NaN'):
-        print feature ,ser['NaN']
+        features_name.append(feature)
+        features_proprotion.append((int(ser['NaN'])/146)*100)
 
+
+#grafico com a proporção de null por features
+
+x_pos = [i for i, _ in enumerate(features_name)]
+
+plt.bar(x_pos, features_proprotion, color='blue')
+plt.xlabel("Atributo")
+plt.ylabel("Proporcao de Nulls")
+plt.title("Proporcao de nulls por atributo")
+
+plt.xticks(x_pos, features_name, rotation='vertical')
+
+#plt.show()
+plt.savefig('atributos.png')
 #numero de caracteristicas usadas
 
 ### Task 1: Select what features you'll use.
@@ -81,6 +104,7 @@ def plot_salaryXbonus(feature_x, feature_y):
     plt.ylabel(feature_y)
 
     #plt.show()
+    plt.savefig('outliner.png')
     #plt.close()
 
 plot_salaryXbonus('salary', 'bonus')
@@ -131,7 +155,7 @@ for person in data_dict:
     data_dict[person]["fraction_to_poi"] = computeFraction(data_dict[person]["from_this_person_to_poi"],
                                                        data_dict[person]["to_messages"])
 
-features_list = features_list + ["fraction_from_poi", "fraction_to_poi"]
+
 
 
 from sklearn.feature_selection import SelectKBest
@@ -150,8 +174,44 @@ my_dataset = data_dict
 data = featureFormat(my_dataset, features_list, sort_keys = True)
 labels, features = targetFeatureSplit(data)
 
+
+
+
+
+results = []
+
+for i in [5, 10, 'all']:
+    Best = SelectKBest(k=i)
+    Best.fit_transform(features, labels)
+    Result = zip(Best.get_support(), Best.scores_, features_list[1:])
+    list_res = list(sorted(Result, key=lambda x: x[1], reverse=True))
+    features_list_test = []
+    for f in list_res:
+        if f[0]==True:
+            features_list_test.append(f[2])
+    results.append(features_list_test)
+
+
+#teste número de features 
+
+features_list = poi_feature + results[0]   #5 features
+#features_list =  poi_feature + results[1]  # 10 features
+#features_list = poi_feature + results[2]   # 15 features
+
+
+
+
+features_list = features_list + ["fraction_from_poi", "fraction_to_poi"]
+
+print features_list
+
+data = featureFormat(my_dataset, features_list, sort_keys = True)
+labels, features = targetFeatureSplit(data)
+
 scaler = MinMaxScaler()
 features = scaler.fit_transform(features)
+
+
 
 
 ### Task 4: Try a varity of classifiers
@@ -160,23 +220,30 @@ features = scaler.fit_transform(features)
 ### you'll need to use Pipelines. For more info:
 ### http://scikit-learn.org/stable/modules/pipeline.html
 
+#Aqui será testado qual a quantidade de número de features utilizados 
+## split the data to training and testing sets
+features_train, features_test, labels_train, labels_test = \
+    train_test_split(features, labels, test_size=0.3, random_state=42)
+
+
 # Provided to give you a starting point. Try a variety of classifiers.
 
-classifiers = {}
-classifiers['NaiveBayes'] = {'clf': GaussianNB(),'params': {} }
+classifiers_dict = {}
+classifiers_dict['NaiveBayes'] = {'clf': GaussianNB(),'params': {} }
 
-classifiers['AdaBoost'] = {'clf': AdaBoostClassifier(),'params':  {'n_estimators': [25, 50, 100],
+classifiers_dict['AdaBoost'] = {'clf': AdaBoostClassifier(),'params':  {'n_estimators': [25, 50, 100],
                                                  'algorithm': ['SAMME', 'SAMME.R'],
                                                  'learning_rate': [.2, .5, 1, 1.4, 2.],
                                                  'random_state': [42]} }
 
-classifiers['SVM'] = {'clf': SVC() , 'params': {'kernel': ['poly', 'rbf', 'sigmoid'],'cache_size': [7000],
+classifiers_dict['SVM'] = {'clf': SVC() , 'params': {'kernel': ['poly', 'rbf', 'sigmoid'],'cache_size': [7000],
                              'tol': [0.0001, 0.001, 0.005, 0.05],
                              'decision_function_shape': ['ovo', 'ovr'],
                              'random_state': [42],
                              'verbose' : [False],
                              'C': [100, 1000, 10000]
                              } }
+
 
 def train(clf, params, features_train, labels_train):  
     #treinar
@@ -223,13 +290,23 @@ def valores_avaliacao(pred, labels_test):
     return accuracy, precision, recall, f1, f2 
 
 
-# Example starting point. Try investigating other evaluation techniques!
-features_train, features_test, labels_train, labels_test = \
-    train_test_split(features, labels, test_size=0.3, random_state=42)
+
+
+    
+    data = featureFormat(my_dataset, features_list, sort_keys = True)
+    labels, features = targetFeatureSplit(data)
+
+    scaler = MinMaxScaler()
+    features = scaler.fit_transform(features)
+
+
+    features_train, features_test, labels_train, labels_test = \
+        train_test_split(features, labels, test_size=0.3, random_state=42)
 
 #para cada classificador testar valores de avaliação utilizando o classificador com parametros pesquisados por GridSearch
-
+classifiers = classifiers_dict.copy()
 for clf in classifiers: 
+    t0 = time() 
     classifier = classifiers[clf]['clf']  
     params = classifiers[clf]['params']  
 
@@ -245,6 +322,9 @@ for clf in classifiers:
     classifiers[clf]['recall'] = recall
     classifiers[clf]['f1'] = f1
     classifiers[clf]['f2'] = f2
+    classifiers[clf]['n_features'] = len(features_list)
+    classifiers[clf]['time'] = (time() - t0)
+
     
 
 ### Task 5: Tune your classifier to achieve better than .3 precision and recall 
@@ -257,6 +337,8 @@ for clf in classifiers:
 #Os classificadores já foram otimizados utilizando a função GridSearchCV
 # onde os parâmetros são selecionados para se obter uma perfomace melhor
 
+'''
+
 for clf in classifiers:
     print clf
     print classifiers[clf]['clf'] 
@@ -264,42 +346,47 @@ for clf in classifiers:
     print 'precision: ', classifiers[clf]['precision'] 
     print 'recall: ', classifiers[clf]['recall'] 
     print 'f1: ', classifiers[clf]['f1'] 
-    print 'f2: ', classifiers[clf]['f2'] 
-    
+    print 'f2: ', classifiers[clf]['f2']
+    print 'n_features: ', classifiers[clf]['n_features']
+    print 'time: ', classifiers[clf]['time']
+'''   
 	
         
-
-
 ### Task 6: Dump your classifier, dataset, and features_list so anyone can
 ### check your results. You do not need to change anything below, but make sure
 ### that the version of poi_id.py that you submit can be run on its own and
 ### generates the necessary .pkl files for validating your results.
+# Os atributos com maior score são sempre os mesmos
+# mesmo testando com diferentes tamanhos de conjutos 
 
-#O classificador 
+
+
+#O classificador com melhor desempenho
+
 clf = classifiers['NaiveBayes']['clf']
 
 print ''
 
 print 'Cross validação com folds = 300'
-        
+            
 test_classifier(clf, my_dataset, features_list, 300)
-	
+
 print ''
 
 print 'Cross validação com folds = 600'
-        
+            
 test_classifier(clf, my_dataset, features_list, 600)
 
 print ''
 
 print 'Cross validação com folds = 1000'
-        
+            
 test_classifier(clf, my_dataset, features_list, 1000)
 
 print ''
 
 print 'Cross validação com folds = 2000'
-        
+            
 test_classifier(clf, my_dataset, features_list, 2000)
 
 dump_classifier_and_data(clf, my_dataset, features_list)
